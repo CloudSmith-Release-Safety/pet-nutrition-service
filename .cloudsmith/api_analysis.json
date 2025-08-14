@@ -1,0 +1,115 @@
+{
+  "org_name": "CloudSmith-Release-Safety",
+  "repo_name": "pet-nutrition-service",
+  "repo_url": "https://github.com/CloudSmith-Release-Safety/pet-nutrition-service",
+  "provided_apis": [
+    {
+      "type": "rest",
+      "endpoint": "/nutrition",
+      "method": "GET",
+      "service_name": "NutritionService",
+      "description": "Fetches all nutrition facts for different pet types",
+      "file_path": "pet-nutrition-service/server.js",
+      "parameters": {
+        "header": [
+          {
+            "name": "Content-Type",
+            "type": "string",
+            "required": false,
+            "default": "application/json",
+            "description": "Content type of the response"
+          }
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "List of all nutrition facts",
+          "content_type": "application/json",
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pet_type": "string",
+                "facts": "string"
+              }
+            }
+          }
+        },
+        "500": {
+          "description": "Server error",
+          "content_type": "application/json",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "message": "string",
+              "error": "object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "rest",
+      "endpoint": "/nutrition/{pet_type}",
+      "method": "GET",
+      "service_name": "NutritionService",
+      "description": "Finds nutrition facts for a specific pet type",
+      "file_path": "pet-nutrition-service/server.js",
+      "parameters": {
+        "path": [
+          {
+            "name": "pet_type",
+            "type": "string",
+            "required": true,
+            "description": "Type of pet (e.g., cat, dog, lizard)"
+          }
+        ],
+        "header": [
+          {
+            "name": "Content-Type",
+            "type": "string",
+            "required": false,
+            "default": "application/json",
+            "description": "Content type of the response"
+          }
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Nutrition fact for the specified pet type",
+          "content_type": "application/json",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "pet_type": "string",
+              "facts": "string"
+            }
+          }
+        },
+        "404": {
+          "description": "Nutrition fact not found for the given pet type",
+          "content_type": "application/json",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "message": "string"
+            }
+          }
+        },
+        "500": {
+          "description": "Server error",
+          "content_type": "application/json",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "message": "string",
+              "error": "object"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "consumed_apis": []
+}
