@@ -6,15 +6,15 @@
     {
       "provider_id": "ecr_repository",
       "resource_type": "ECR",
-      "resource_identifier": "nodejs-petclinic-nutrition-service",
-      "file_path": "push-ecr.sh",
+      "resource_identifier": "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/nodejs-petclinic-nutrition-service",
+      "file_path": "/push-ecr.sh",
       "infrastructure_type": "SDK-Direct",
-      "description": "ECR repository used to store container images for the pet nutrition service",
+      "description": "Amazon ECR repository that stores the container images for the pet nutrition service",
       "interfaces": [
         {
-          "interface_type": "container-registry",
+          "interface_type": "container_registry",
           "endpoint_pattern": "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/nodejs-petclinic-nutrition-service",
-          "operations": ["PushImage", "PullImage"],
+          "operations": ["push", "pull"],
           "authentication": "IAM"
         }
       ],
@@ -22,85 +22,77 @@
         "image_tags": ["latest", "${COMMIT_SHA}"]
       },
       "environment_variables": [],
-      "provider_type": "external"
+      "deployment_details": {
+        "creation_method": "aws ecr create-repository command",
+        "deployed_through": "GitHub Actions workflow"
+      },
+      "provider_type": "internal"
     },
     {
       "provider_id": "eks_cluster",
       "resource_type": "EKS",
       "resource_identifier": "petclinic-demo",
-      "file_path": ".github/workflows/eks-deploy.yml",
-      "infrastructure_type": "External",
+      "file_path": "/.github/workflows/eks-deploy.yml",
+      "infrastructure_type": "SDK-Direct",
       "description": "Amazon EKS cluster where the pet nutrition service is deployed",
       "interfaces": [
         {
-          "interface_type": "kubernetes-api",
-          "endpoint_pattern": "petclinic-demo.${REGION}.eks.amazonaws.com",
-          "operations": ["CreateDeployment", "UpdateDeployment", "CreateService", "CreateIngress"],
+          "interface_type": "kubernetes_api",
+          "endpoint_pattern": "https://kubernetes.${REGION}.eks.amazonaws.com",
+          "operations": ["apply", "create", "update", "delete"],
           "authentication": "IAM"
         }
       ],
       "configuration": {
         "region": "us-west-2",
-        "name": "petclinic-demo"
+        "namespace": "default"
       },
-      "environment_variables": ["TF_VAR_cluster_name=petclinic-demo"],
-      "provider_type": "external"
-    },
-    {
-      "provider_id": "aws_iam_role",
-      "resource_type": "IAM",
-      "resource_identifier": "${AWS_ROLE_TO_ASSUME}",
-      "file_path": ".github/workflows/eks-deploy.yml",
-      "infrastructure_type": "External",
-      "description": "IAM role used by GitHub Actions for AWS authentication and operations",
-      "interfaces": [
-        {
-          "interface_type": "auth",
-          "endpoint_pattern": "iam.amazonaws.com",
-          "operations": ["AssumeRole"],
-          "authentication": "OIDC"
-        }
+      "environment_variables": [
+        "TF_VAR_cluster_name=petclinic-demo"
       ],
-      "configuration": {
-        "role_name": "${AWS_ROLE_TO_ASSUME}"
+      "deployment_details": {
+        "deployment_method": "kubectl via GitHub Actions",
+        "kubeconfig_generation": "aws eks update-kubeconfig"
       },
-      "environment_variables": [],
       "provider_type": "external"
     },
     {
-      "provider_id": "load_balancer",
-      "resource_type": "ALB",
-      "resource_identifier": "kubernetes.io/ingress.class: alb",
-      "file_path": "scripts/eks/appsignals/sample-app/alb-ingress/petclinic-ingress.yaml",
+      "provider_id": "elb_load_balancer",
+      "resource_type": "ELB",
+      "resource_identifier": "ingress-nginx LoadBalancer",
+      "file_path": "/scripts/eks/appsignals/sample-app/k8s-nginx-ingress/nginx-alb.yaml",
       "infrastructure_type": "Kubernetes",
-      "description": "Application Load Balancer created by AWS Load Balancer Controller from Kubernetes Ingress",
+      "description": "AWS Load Balancer created by Kubernetes Ingress Controller to expose the pet nutrition service",
       "interfaces": [
         {
-          "interface_type": "http",
-          "endpoint_pattern": "${ingress_hostname}",
-          "operations": ["ForwardRequest"],
+          "interface_type": "network",
+          "endpoint_pattern": "${loadBalancer.ingress[0].hostname}",
+          "operations": ["http-get", "http-post"],
           "authentication": "None"
         }
       ],
       "configuration": {
-        "scheme": "internet-facing",
-        "target_type": "ip"
+        "service_type": "LoadBalancer",
+        "ports": [
+          {"name": "http", "port": 80, "targetPort": 80, "nodePort": 32080},
+          {"name": "https", "port": 443, "targetPort": 443, "nodePort": 32081},
+          {"name": "prometheus", "port": 9113, "targetPort": 9113}
+        ]
       },
-      "environment_variables": [],
-      "provider_type": "external"
+      "provider_type": "internal"
     },
     {
-      "provider_id": "rds_database",
+      "provider_id": "rds_postgres_database",
       "resource_type": "RDS",
       "resource_identifier": "petclinic-database.cufgmmyvvbb2.us-west-2.rds.amazonaws.com",
-      "file_path": "scripts/eks/appsignals/tf-deploy-k8s-res.sh",
+      "file_path": "/scripts/eks/appsignals/tf-deploy-k8s-res.sh",
       "infrastructure_type": "External",
-      "description": "PostgreSQL RDS instance referenced in deployment scripts",
+      "description": "Amazon RDS PostgreSQL database referenced in deployment scripts",
       "interfaces": [
         {
           "interface_type": "database",
           "endpoint_pattern": "petclinic-database.cufgmmyvvbb2.us-west-2.rds.amazonaws.com:5432",
-          "operations": ["Connect", "Query"],
+          "operations": ["connect"],
           "authentication": "Username/Password"
         }
       ],
@@ -108,34 +100,46 @@
         "host": "petclinic-database.cufgmmyvvbb2.us-west-2.rds.amazonaws.com",
         "port": "5432"
       },
-      "environment_variables": [],
+      "provider_type": "external"
+    },
+    {
+      "provider_id": "iam_role",
+      "resource_type": "IAM",
+      "resource_identifier": "${AWS_ROLE_TO_ASSUME}",
+      "file_path": "/.github/workflows/eks-deploy.yml",
+      "infrastructure_type": "SDK-Direct",
+      "description": "IAM role used by GitHub Actions for AWS authentication",
+      "interfaces": [
+        {
+          "interface_type": "authentication",
+          "endpoint_pattern": "sts.amazonaws.com",
+          "operations": ["AssumeRole"],
+          "authentication": "OIDC"
+        }
+      ],
+      "configuration": {
+        "permissions": ["ECR access", "EKS access"]
+      },
       "provider_type": "external"
     }
   ],
   "application_consumers": [
     {
-      "consumer_id": "nutrition_service",
+      "consumer_id": "nutrition_service_app",
       "component_type": "service",
-      "file_path": "pet-nutrition-service/server.js",
+      "file_path": "/pet-nutrition-service/server.js",
       "language": "JavaScript",
-      "description": "Nutrition service that provides nutrition facts for different types of pets",
+      "description": "Main Node.js application that provides pet nutrition facts API",
       "resource_discovery": {
         "method": "environment variables",
-        "environment_variables": ["MONGO_URI", "EUREKA_SERVER_URL", "PORT"]
+        "environment_variables": ["MONGO_URI", "PORT", "EUREKA_SERVER_URL"]
       },
       "authentication": {
-        "method": "IAM role",
-        "role_references": ["visits-service-account"]
+        "method": "Username/Password",
+        "role_references": []
       },
       "package_dependencies": [
-        "express",
-        "mongoose",
-        "dotenv",
-        "pino",
-        "pino-http",
-        "axios",
-        "axios-retry",
-        "ip"
+        "express", "mongoose", "dotenv", "pino-http", "axios", "axios-retry", "ip"
       ],
       "internal_dependencies": [],
       "external_dependencies": [
@@ -147,57 +151,66 @@
         {
           "resource_type": "EurekaServer",
           "resource_name": "discovery-server",
-          "repository": "pet-clinic-microservices-infra"
+          "repository": "N/A"
         }
       ]
     },
     {
-      "consumer_id": "deployment_workflow",
-      "component_type": "workflow",
-      "file_path": ".github/workflows/eks-deploy.yml",
+      "consumer_id": "github_actions_workflow",
+      "component_type": "ci_cd_workflow",
+      "file_path": "/.github/workflows/eks-deploy.yml",
       "language": "YAML",
-      "description": "GitHub Actions workflow that builds and deploys the nutrition service to Amazon EKS",
+      "description": "GitHub Actions workflow that builds and deploys the pet nutrition service to EKS",
       "resource_discovery": {
-        "method": "environment variables",
-        "environment_variables": ["AWS_REGION", "TF_VAR_cluster_name"]
+        "method": "environment variables and secrets",
+        "environment_variables": ["AWS_REGION", "TFSTATE_REGION", "TF_VAR_cluster_name"],
+        "configuration_files": ["/.github/workflows/eks-deploy.yml"]
       },
       "authentication": {
         "method": "IAM role",
-        "role_references": ["${AWS_ROLE_TO_ASSUME}"]
+        "role_references": ["AWS_ROLE_TO_ASSUME"]
+      },
+      "sdk_usage": {
+        "sdk_type": "AWS CLI",
+        "clients": ["sts", "eks", "ecr"]
       },
       "package_dependencies": [],
-      "internal_dependencies": [],
-      "external_dependencies": [
+      "internal_dependencies": [
         {
           "resource_type": "ECR",
           "resource_name": "nodejs-petclinic-nutrition-service",
-          "repository": "N/A"
-        },
+          "file_path": "/push-ecr.sh"
+        }
+      ],
+      "external_dependencies": [
         {
           "resource_type": "EKS",
           "resource_name": "petclinic-demo",
-          "repository": "petclinic-infrastructure"
+          "repository": "N/A"
         },
         {
           "resource_type": "IAM",
-          "resource_name": "${AWS_ROLE_TO_ASSUME}",
-          "repository": "petclinic-infrastructure"
+          "resource_name": "AWS_ROLE_TO_ASSUME",
+          "repository": "N/A"
         }
       ]
     },
     {
       "consumer_id": "ecr_push_script",
       "component_type": "script",
-      "file_path": "push-ecr.sh",
+      "file_path": "/push-ecr.sh",
       "language": "Bash",
-      "description": "Script that builds and pushes Docker images to Amazon ECR",
+      "description": "Bash script that builds and pushes Docker images to Amazon ECR",
       "resource_discovery": {
         "method": "environment variables",
         "environment_variables": ["ACCOUNT", "REGION", "COMMIT_SHA"]
       },
       "authentication": {
-        "method": "aws cli",
-        "role_references": []
+        "method": "AWS CLI credentials"
+      },
+      "sdk_usage": {
+        "sdk_type": "AWS CLI",
+        "clients": ["ecr", "sts"]
       },
       "package_dependencies": [],
       "internal_dependencies": [],
@@ -206,51 +219,25 @@
           "resource_type": "ECR",
           "resource_name": "nodejs-petclinic-nutrition-service",
           "repository": "N/A"
-        }
-      ]
-    },
-    {
-      "consumer_id": "nutrition_service_update_script",
-      "component_type": "script",
-      "file_path": "pet-nutrition-service/nutrition-service-update.sh",
-      "language": "Bash",
-      "description": "Script that updates the nutrition service container image in ECR and restarts the Kubernetes pods",
-      "resource_discovery": {
-        "method": "environment variables and AWS CLI",
-        "environment_variables": ["REGION", "ACCOUNT_ID", "ECR_URL"]
-      },
-      "authentication": {
-        "method": "aws cli",
-        "role_references": []
-      },
-      "package_dependencies": [],
-      "internal_dependencies": [],
-      "external_dependencies": [
-        {
-          "resource_type": "ECR",
-          "resource_name": "nodejs-petclinic-nutrition-service",
-          "repository": "N/A"
-        },
-        {
-          "resource_type": "EKS",
-          "resource_name": "petclinic-demo",
-          "repository": "petclinic-infrastructure"
         }
       ]
     },
     {
       "consumer_id": "k8s_deployment_script",
       "component_type": "script",
-      "file_path": "scripts/eks/appsignals/tf-deploy-k8s-res.sh",
+      "file_path": "/scripts/eks/appsignals/tf-deploy-k8s-res.sh",
       "language": "Bash",
-      "description": "Script that deploys Kubernetes resources to the EKS cluster",
+      "description": "Bash script that deploys Kubernetes resources to EKS cluster",
       "resource_discovery": {
-        "method": "script parameters and environment variables",
-        "environment_variables": ["CLUSTER_NAME", "REGION", "NAMESPACE", "OPERATION", "ACCOUNT_ID"]
+        "method": "command line arguments and environment variables",
+        "environment_variables": []
       },
       "authentication": {
-        "method": "aws cli and kubectl",
-        "role_references": []
+        "method": "kubeconfig"
+      },
+      "sdk_usage": {
+        "sdk_type": "AWS CLI",
+        "clients": ["sts"]
       },
       "package_dependencies": [],
       "internal_dependencies": [],
@@ -258,190 +245,176 @@
         {
           "resource_type": "EKS",
           "resource_name": "petclinic-demo",
-          "repository": "petclinic-infrastructure"
-        },
-        {
-          "resource_type": "ECR",
-          "resource_name": "nodejs-petclinic-nutrition-service",
           "repository": "N/A"
         },
         {
           "resource_type": "RDS",
           "resource_name": "petclinic-database",
-          "repository": "petclinic-infrastructure"
+          "repository": "N/A"
         }
       ]
     }
   ],
   "connections": [
     {
-      "connection_id": "deploy_workflow_to_ecr",
-      "consumer_id": "deployment_workflow",
+      "connection_id": "github_actions_to_ecr",
+      "consumer_id": "github_actions_workflow",
       "provider_id": "ecr_repository",
       "provider_resource_type": "ECR",
-      "operation": "createRepository",
+      "operation": "push",
       "access_type": "write",
-      "description": "GitHub Actions workflow creates an ECR repository if it doesn't exist",
-      "code_snippet": "aws ecr create-repository --repository-name nodejs-petclinic-nutrition-service --region ${REGION} --no-cli-pager || true",
-      "source_file_path": "push-ecr.sh",
-      "target_file_path": "push-ecr.sh",
+      "description": "GitHub Actions workflow pushes Docker images to ECR repository",
+      "code_snippet": "./push-ecr.sh",
+      "source_file_path": "/.github/workflows/eks-deploy.yml",
+      "target_file_path": "/push-ecr.sh",
       "configuration_source": "environment variable",
       "criticality": "high",
       "connection_type": "direct",
       "cross_repo": false
     },
     {
-      "connection_id": "deploy_workflow_to_ecr_push",
-      "consumer_id": "deployment_workflow",
-      "provider_id": "ecr_repository",
-      "provider_resource_type": "ECR",
-      "operation": "pushImage",
-      "access_type": "write",
-      "description": "GitHub Actions workflow pushes Docker images to ECR",
-      "code_snippet": "docker push ${REPOSITORY_PREFIX}/nodejs-petclinic-nutrition-service:latest",
-      "source_file_path": "push-ecr.sh",
-      "target_file_path": "push-ecr.sh",
-      "configuration_source": "environment variable",
-      "criticality": "high",
-      "connection_type": "direct",
-      "cross_repo": false
-    },
-    {
-      "connection_id": "deploy_workflow_to_eks",
-      "consumer_id": "deployment_workflow",
+      "connection_id": "github_actions_to_eks",
+      "consumer_id": "github_actions_workflow",
       "provider_id": "eks_cluster",
       "provider_resource_type": "EKS",
-      "operation": "updateKubeconfig",
-      "access_type": "admin",
-      "description": "GitHub Actions workflow updates kubeconfig for EKS cluster access",
+      "operation": "update-kubeconfig",
+      "access_type": "read",
+      "description": "GitHub Actions workflow gets EKS cluster configuration for deployment",
       "code_snippet": "aws eks update-kubeconfig --name ${{ env.TF_VAR_cluster_name }} --region ${{ env.AWS_REGION }} --alias ${{ env.TF_VAR_cluster_name }}",
-      "source_file_path": ".github/workflows/eks-deploy.yml",
+      "source_file_path": "/.github/workflows/eks-deploy.yml",
       "target_file_path": "N/A",
       "configuration_source": "environment variable",
       "criticality": "high",
       "connection_type": "direct",
       "cross_repo": true,
-      "target_repo": "petclinic-infrastructure"
+      "target_repo": "unknown"
     },
     {
-      "connection_id": "deploy_workflow_to_iam",
-      "consumer_id": "deployment_workflow",
-      "provider_id": "aws_iam_role",
+      "connection_id": "github_actions_to_iam",
+      "consumer_id": "github_actions_workflow",
+      "provider_id": "iam_role",
       "provider_resource_type": "IAM",
-      "operation": "assumeRole",
-      "access_type": "admin",
-      "description": "GitHub Actions workflow assumes an IAM role for AWS operations",
-      "code_snippet": "uses: aws-actions/configure-aws-credentials@v2\n        with:\n          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}",
-      "source_file_path": ".github/workflows/eks-deploy.yml",
+      "operation": "assume-role",
+      "access_type": "read",
+      "description": "GitHub Actions workflow assumes IAM role for AWS authentication",
+      "code_snippet": "role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}",
+      "source_file_path": "/.github/workflows/eks-deploy.yml",
       "target_file_path": "N/A",
-      "configuration_source": "repository secrets",
+      "configuration_source": "GitHub secret",
       "criticality": "high",
       "connection_type": "direct",
       "cross_repo": true,
-      "target_repo": "petclinic-infrastructure"
+      "target_repo": "unknown"
     },
     {
-      "connection_id": "deploy_script_to_eks",
-      "consumer_id": "k8s_deployment_script",
-      "provider_id": "eks_cluster",
-      "provider_resource_type": "EKS",
-      "operation": "applyResources",
-      "access_type": "write",
-      "description": "K8s deployment script applies resources to the EKS cluster",
-      "code_snippet": "kubectl -v=2 ${OPERATION} --namespace=$NAMESPACE -f -",
-      "source_file_path": "scripts/eks/appsignals/tf-deploy-k8s-res.sh",
-      "target_file_path": "N/A",
-      "configuration_source": "script parameters",
-      "criticality": "high",
-      "connection_type": "direct",
-      "cross_repo": true,
-      "target_repo": "petclinic-infrastructure"
-    },
-    {
-      "connection_id": "update_script_to_ecr",
-      "consumer_id": "nutrition_service_update_script",
+      "connection_id": "ecr_push_script_to_ecr",
+      "consumer_id": "ecr_push_script",
       "provider_id": "ecr_repository",
       "provider_resource_type": "ECR",
-      "operation": "pushImage",
+      "operation": "create-repository",
       "access_type": "write",
-      "description": "Service update script pushes Docker image to ECR",
-      "code_snippet": "docker push ${ECR_URL}/nodejs-petclinic-nutrition-service:latest",
-      "source_file_path": "pet-nutrition-service/nutrition-service-update.sh",
-      "target_file_path": "N/A",
+      "description": "Push script creates ECR repository if it doesn't exist",
+      "code_snippet": "aws ecr create-repository --repository-name nodejs-petclinic-nutrition-service --region ${REGION} --no-cli-pager || true",
+      "source_file_path": "/push-ecr.sh",
+      "target_file_path": "/push-ecr.sh",
       "configuration_source": "environment variable",
       "criticality": "high",
       "connection_type": "direct",
       "cross_repo": false
     },
     {
-      "connection_id": "update_script_to_eks",
-      "consumer_id": "nutrition_service_update_script",
-      "provider_id": "eks_cluster",
-      "provider_resource_type": "EKS",
-      "operation": "deletePods",
+      "connection_id": "ecr_push_script_to_ecr_push",
+      "consumer_id": "ecr_push_script",
+      "provider_id": "ecr_repository",
+      "provider_resource_type": "ECR",
+      "operation": "push",
       "access_type": "write",
-      "description": "Service update script deletes pods to force deployment update",
-      "code_snippet": "kubectl delete pods -l io.kompose.service=nutrition-service-nodejs",
-      "source_file_path": "pet-nutrition-service/nutrition-service-update.sh",
-      "target_file_path": "N/A",
-      "configuration_source": "hardcoded",
-      "criticality": "medium",
+      "description": "Push script pushes Docker images to ECR repository",
+      "code_snippet": "docker push ${REPOSITORY_PREFIX}/nodejs-petclinic-nutrition-service:latest",
+      "source_file_path": "/push-ecr.sh",
+      "target_file_path": "/push-ecr.sh",
+      "configuration_source": "environment variable",
+      "criticality": "high",
       "connection_type": "direct",
-      "cross_repo": true,
-      "target_repo": "petclinic-infrastructure"
+      "cross_repo": false
     },
     {
-      "connection_id": "k8s_deployment_to_alb",
+      "connection_id": "k8s_script_to_eks",
       "consumer_id": "k8s_deployment_script",
-      "provider_id": "load_balancer",
-      "provider_resource_type": "ALB",
-      "operation": "createIngress",
+      "provider_id": "eks_cluster",
+      "provider_resource_type": "EKS",
+      "operation": "apply",
       "access_type": "write",
-      "description": "K8s deployment script creates an ingress that provisions an ALB",
+      "description": "Kubernetes deployment script applies resources to EKS cluster",
       "code_snippet": "kubectl -v=2 ${OPERATION} --namespace=$NAMESPACE -f -",
-      "source_file_path": "scripts/eks/appsignals/tf-deploy-k8s-res.sh",
-      "target_file_path": "scripts/eks/appsignals/sample-app/alb-ingress/petclinic-ingress.yaml",
+      "source_file_path": "/scripts/eks/appsignals/tf-deploy-k8s-res.sh",
+      "target_file_path": "N/A",
+      "configuration_source": "command line argument",
+      "criticality": "high",
+      "connection_type": "direct",
+      "cross_repo": true,
+      "target_repo": "unknown"
+    },
+    {
+      "connection_id": "k8s_deployment_to_elb",
+      "consumer_id": "k8s_deployment_script",
+      "provider_id": "elb_load_balancer",
+      "provider_resource_type": "ELB",
+      "operation": "create",
+      "access_type": "write",
+      "description": "Kubernetes deployment creates ELB through LoadBalancer service type",
+      "code_snippet": "spec:\n  type: LoadBalancer",
+      "source_file_path": "/scripts/eks/appsignals/tf-deploy-k8s-res.sh",
+      "target_file_path": "/scripts/eks/appsignals/sample-app/k8s-nginx-ingress/nginx-alb.yaml",
       "configuration_source": "kubernetes manifest",
       "criticality": "high",
+      "connection_type": "indirect",
+      "cross_repo": false
+    },
+    {
+      "connection_id": "k8s_script_to_rds_reference",
+      "consumer_id": "k8s_deployment_script",
+      "provider_id": "rds_postgres_database",
+      "provider_resource_type": "RDS",
+      "operation": "reference",
+      "access_type": "read",
+      "description": "Kubernetes deployment script references RDS endpoint in configuration",
+      "code_snippet": "host=\"petclinic-database.cufgmmyvvbb2.us-west-2.rds.amazonaws.com\"",
+      "source_file_path": "/scripts/eks/appsignals/tf-deploy-k8s-res.sh",
+      "target_file_path": "N/A",
+      "configuration_source": "hardcoded",
+      "criticality": "high",
       "connection_type": "direct",
       "cross_repo": true,
-      "target_repo": "petclinic-infrastructure"
+      "target_repo": "unknown"
     }
   ],
   "architecture": {
     "application_type": "microservice",
     "infrastructure_pattern": "container-based",
     "deployment_approach": "CI/CD",
-    "configuration_management": "environment variables and Kubernetes configmaps",
+    "configuration_management": "Kubernetes manifests with environment variables",
     "critical_paths": [
       {
-        "path_name": "ci_cd_pipeline",
-        "description": "Build and deploy pipeline from code to EKS",
-        "involved_components": ["deployment_workflow", "ecr_repository", "eks_cluster", "nutrition_service"]
+        "path_name": "container_image_deployment",
+        "description": "Build and deployment of container images to EKS",
+        "involved_components": ["github_actions_workflow", "ecr_push_script", "ecr_repository", "eks_cluster"]
       },
       {
-        "path_name": "service_discovery",
-        "description": "Service registration with Eureka for service discovery",
-        "involved_components": ["nutrition_service", "external_eureka_server"]
-      },
-      {
-        "path_name": "external_access",
-        "description": "External access to the service via ALB ingress",
-        "involved_components": ["load_balancer", "eks_cluster", "nutrition_service"]
+        "path_name": "service_exposure",
+        "description": "Exposure of service through LoadBalancer",
+        "involved_components": ["k8s_deployment_script", "elb_load_balancer", "eks_cluster"]
       }
     ],
     "security_model": {
-      "authentication": "IAM roles for service accounts in EKS",
-      "authorization": "Kubernetes RBAC and AWS IAM",
-      "data_protection": "Network isolation via Kubernetes namespaces"
+      "authentication": "IAM roles for CI/CD, username/password for database",
+      "authorization": "IAM policies and Kubernetes RBAC",
+      "data_protection": "TLS for API endpoints"
     },
     "cross_repo_dependencies": {
-      "provides_to": [
-        {"repository": "pet-clinic-frontend", "resources": ["nutrition_service_api"]}
-      ],
+      "provides_to": [],
       "consumes_from": [
-        {"repository": "petclinic-infrastructure", "resources": ["eks_cluster", "aws_iam_role", "load_balancer"]},
-        {"repository": "pet-clinic-microservices-infra", "resources": ["eureka_server"]}
+        {"repository": "unknown-infrastructure-repo", "resources": ["eks_cluster", "iam_role", "rds_postgres_database"]}
       ],
       "shared_infrastructure": true
     }
