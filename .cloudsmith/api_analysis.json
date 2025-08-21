@@ -5,10 +5,45 @@
   "provided_apis": [
     {
       "type": "rest",
-      "endpoint": "/nutrition/:pet_type",
+      "endpoint": "/nutrition",
       "method": "GET",
       "service_name": "NutritionService",
-      "description": "Find nutrition facts for a specific pet type",
+      "description": "Retrieves all pet nutrition facts",
+      "file_path": "pet-nutrition-service/server.js",
+      "responses": {
+        "200": {
+          "description": "Successfully fetched all nutrition facts",
+          "content_type": "application/json",
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pet_type": "string",
+                "facts": "string"
+              }
+            }
+          }
+        },
+        "500": {
+          "description": "Failed to fetch nutrition facts",
+          "content_type": "application/json",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "message": "string",
+              "error": "object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "rest",
+      "endpoint": "/nutrition/{pet_type}",
+      "method": "GET",
+      "service_name": "NutritionService",
+      "description": "Retrieves nutrition facts for a specific pet type",
       "file_path": "pet-nutrition-service/server.js",
       "parameters": {
         "path": [
@@ -16,13 +51,13 @@
             "name": "pet_type",
             "type": "string",
             "required": true,
-            "description": "Type of pet to get nutrition facts for (e.g., cat, dog, lizard)"
+            "description": "Type of pet (e.g., cat, dog, lizard)"
           }
         ]
       },
       "responses": {
         "200": {
-          "description": "Successfully retrieved nutrition facts",
+          "description": "Successfully fetched nutrition fact for the specified pet type",
           "content_type": "application/json",
           "schema": {
             "type": "object",
@@ -54,50 +89,15 @@
           }
         }
       }
-    },
-    {
-      "type": "rest",
-      "endpoint": "/nutrition",
-      "method": "GET",
-      "service_name": "NutritionService",
-      "description": "Fetch all available nutrition facts",
-      "file_path": "pet-nutrition-service/server.js",
-      "responses": {
-        "200": {
-          "description": "Successfully retrieved all nutrition facts",
-          "content_type": "application/json",
-          "schema": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "pet_type": "string",
-                "facts": "string"
-              }
-            }
-          }
-        },
-        "500": {
-          "description": "Failed to fetch nutrition facts",
-          "content_type": "application/json",
-          "schema": {
-            "type": "object",
-            "properties": {
-              "message": "string",
-              "error": "object"
-            }
-          }
-        }
-      }
     }
   ],
   "consumed_apis": [
     {
       "type": "rest",
       "service": "EurekaService",
-      "endpoint": "/eureka/apps/:app",
+      "endpoint": "/eureka/apps/{app}",
       "method": "POST",
-      "description": "Registers the nutrition service with Eureka service discovery",
+      "description": "Registers the nutrition service with Eureka service registry",
       "file_path": "pet-nutrition-service/eureka-client.js",
       "request_payload": {
         "instance": {
@@ -121,9 +121,9 @@
     {
       "type": "rest",
       "service": "EurekaService",
-      "endpoint": "/eureka/apps/:app/:instanceId",
+      "endpoint": "/eureka/apps/{app}/{instanceId}",
       "method": "PUT",
-      "description": "Sends heartbeat to Eureka server to maintain registration",
+      "description": "Sends heartbeat to Eureka to maintain registration",
       "file_path": "pet-nutrition-service/eureka-client.js"
     }
   ]
